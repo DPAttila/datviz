@@ -1,0 +1,146 @@
+<!DOCTYPE HTML>
+<html lang="en-US">
+  <meta charset="UTF-8">
+  <head>
+    <title>Weather data visualization</title>
+    <link rel="stylesheet" href="index.css">
+  </head>
+  <body>
+    <link rel="stylesheet" href="https://code.jquery.com/ui/1.12.1/themes/smoothness/jquery-ui.css">
+    <script src="https://code.jquery.com/jquery-1.12.4.js"></script>
+    <script src="https://code.jquery.com/ui/1.12.1/jquery-ui.js"></script>
+
+    <script src="three.min.js"></script>
+
+    <script id="vertex-shader" type="x-shader/x-vertex">
+      attribute float hasData; 
+      varying vec3 pos;
+      varying vec3 col;
+      varying float data;
+      
+      void main() {
+        pos = position;
+        col = color;
+        data = hasData;
+        vec4 modelViewPosition = modelViewMatrix * vec4(position, 1.0);
+        gl_Position = projectionMatrix * modelViewPosition;
+      }
+    </script>
+    
+    <script id="fragment-shader" type="x-shader/x-fragment">
+      varying vec3 pos;
+      varying vec3 col;
+      varying float data;
+      void main() {
+        gl_FragColor = vec4(col.r, col.g, col.b, 1.0);
+        if (data < 1.0) {
+          float val = 0.25;
+          if (
+            pos.x * 200.0 - floor(pos.x * 200.0) > 0.5 !=
+            pos.y * 200.0 - floor(pos.y * 200.0) > 0.5
+          ) 
+            val = 0.35;
+          gl_FragColor = vec4(val, val, val, 0.0);
+        }
+      }
+    </script>
+    
+    <div class="popup" id="info">
+      <center><font size="40">Időjárás térkép</font></center>
+      <br>
+      
+      Ez a vizualizáció a II. székelydata adatvizualizációs versenyre készült. A térképen a Románia es Magyarország meteorológiai állomásai által rögzített hőmérséklet, hómélység és csapadékmennyiség vizsgálható, napos felbontásban.<br>
+      
+      <br>
+      
+      <button class="drop-down" id="info-button1">Hogy kell használni?</button>
+      <p class="info-text" id="info-text1">
+        Az egérrel húzogathatjuk a térképet és a görgővel ráközelíthetünk.<br><br>
+
+        Az ablak alsó részében található csúszkával vagy az alatta levő dátum input mezővel kiválasztjuk, hogy melyik dátumot vizsgáljuk.
+        A dátumot naponként előre és hátra tudjuk ugratni a jobbra és balra billentyűkkel.<br><br>
+        
+        A bal felső sarokban lévő hőmérséklet, hómélység és csapadékmennyiség gombok segítségével kiválasztjuk, hogy milyen adatot szeretnénk vizsgálni. Ahol a térkép szürkén kockázott, ott nincs adat az adott napra.<br><br>
+        
+        A bal felső sarokban levő kettéosztás gombbal két részre osztható a képernyő, így egyszerre két napot is vizsgálhatunk. (Ebben az esetben a nyilak mindkét dátumot léptetik)<br>
+      </p>
+      
+      <button class="drop-down" id="info-button2">Hogy működik?</button>
+      <p class="info-text" id="info-text2">
+        A térképet Delaunay-háromszögeléssel generáltam a meteorológiai állomások koordinátái alapján. (A háromszögeket megnézheted az élek bekapcsolásával a bal felső sarokban.)<br><br>
+        
+        A vizualizáció a Three.js nevű, webgl alapú 3d-s könyvtár segítségével történik.<br><br>
+        
+        Ha kiválasztunk egy dátumot, a szerver egy adatbázisból lekéri az adott nap mérési átlagát (hőmérséklet esetében), illetve maximumát (csapadék és hómélység esetében). Mivel a pontos adatokat csak a meteorológiai állomásoknál ismerjük, a közéjük eső területeken egy shader segítségével lineáris interpolációval számítjuk ki (tippeljük meg) az adatokat, így fenntartva a térkép színezésének folytonosságát.<br><br>
+        
+        <a href="https://hu.wikipedia.org/wiki/Delaunay-h%C3%A1romsz%C3%B6gel%C3%A9s">Wikipedia cikk a Delaunay-háromszögelésről</a>
+        <br>
+        <a href="https://www.ti.inf.ethz.ch/ew/Lehre/CG13/lecture/Chapter%206.pdf">Leíras a Delaunay-haromszögelésről (angol nyelven)</a>
+        <br>
+        <a href="https://www.ti.inf.ethz.ch/ew/Lehre/CG13/lecture/Chapter%207.pdf">Az általam használt inkrementális algoritmus leírása (angol nyelven)</a>
+        <br>
+        <a href="https://threejs.org/">Three.js könyvtár</a> <br>
+        <br>
+      </p>
+      
+      <button id="start-button">Indítás</button>
+    </div>
+    
+    <div class="vertical-menu" id="v-menu">
+      <p>Élek</p>
+      <label class="switch">
+        <input type="checkbox" id="edges-checkbox" checked="true">
+        <span class="switch-slider"></span>
+      </label>
+      
+      <br>
+      
+      <p>Kettéosztás</p>
+      <label class="switch">
+        <input type="checkbox" id="vertical-split-checkbox" checked="false">
+        <span class="switch-slider"></span>
+      </label>
+      
+      <br><br>
+      
+      <p>Hőmérséklet</p>
+      <label class="switch">
+        <input type="radio" name="view" value="temp">
+        <span class="switch-slider"></span>
+      </label>
+      
+      <br>
+      
+      <p>Hómélység</p>
+      <label class="switch">
+        <input type="radio" name="view" value="snow"> 
+        <span class="switch-slider"></span>
+      </label>
+      
+      <br>
+      
+      <p>Csapadékmennyiség</p>
+      <label class="switch">
+        <input type="radio" name="view" value="precip">
+        <span class="switch-slider"></span>
+      </label>
+      
+      <br>
+      
+      <button id="help-button" src="help.png"></button>
+    </div>
+    
+    <div class="legend">
+      <p id="scale-desc"></p>
+      <br>
+      <canvas class="scale-canvas" width="100px" height="400px" id="canvas2d"></canvas>
+    </div>
+    
+    <div class="horizontal-menu" id="h-menu">
+      <input type="range" class="slider" id="time-range1">
+      <input type="date" id="datepicker1"></input>
+    </div>
+    <script src="delaunay.js"></script>
+    <script src="index.js"></script>
+  </body>
+</html>
